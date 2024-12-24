@@ -13,7 +13,9 @@ This is a PyTorch implementation of InceptionNeXt proposed by our paper "[Incept
 **TLDR**: To speed up ConvNeXt, we build InceptionNeXt by decomposing the large kernel dpethweise convolution with Inception style. **Our InceptionNeXt-T enjoys both ResNet-50’s speed and ConvNeXt-T’s accuracy.**
 
 
+
 ## Requirements
+
 Our models are trained and tested in the environment of PyTorch 1.13, NVIDIA CUDA 11.7.1 and timm 0.6.11 (`pip install timm==0.6.11`). If you use docker, check [Dockerfile](docker/Dockerfile) that we used.
 
 
@@ -36,7 +38,9 @@ Data preparation: ImageNet with the following folder structure, you can extract 
 ```
 
 
+
 ## Models
+
 ### InceptionNeXt trained on ImageNet-1K
 | Model | Resolution | Params | MACs | Train throughput | Infer. throughput | Top1 Acc |
 | :---     |   :---:    |  :---: |  :---:  |  :---:  |  :---:  |  :---:  |
@@ -71,6 +75,7 @@ The throughputs are measured on an A100 with full precisioni and batch size of 1
 We also provide a Colab notebook which run the steps to perform inference with InceptionNeXt: [![Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1-CAPm6FNKYRbe_lAPxIBxsIH4xowgfg8?usp=sharing)
 
 
+
 ## Validation
 
 To evaluate our CAFormer-S18 models, run:
@@ -81,7 +86,10 @@ python3 validate.py /path/to/imagenet  --model $MODEL -b 128 \
   --pretrained
 ```
 
+
+
 ## Benchmarking throughput
+
 On the environment described above, we benchmark throughputs on an A100 with batch size of 128. The beter results of "Channel First" and "Channel Last" memory layouts are reported.
 
 For Channel First:
@@ -96,7 +104,10 @@ MODEL=inceptionnext_tiny # convnext_tiny
 python3 benchmark.py /path/to/imagenet  --model $MODEL --channel-last
 ```
 
+
+
 ## Train
+
 We use batch size of 4096 by default and we show how to train models with 8 GPUs. For multi-node training, adjust `--grad-accum-steps` according to your situations.
 
 
@@ -123,7 +134,9 @@ cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
 Training (fine-tuning) scripts of other models are shown in [scripts](/scripts/).
 
 
+
 ## Bibtex
+
 ```
 @inproceedings{yu2024inceptionnext,
   title={Inceptionnext: When inception meets convnext},
@@ -134,5 +147,8 @@ Training (fine-tuning) scripts of other models are shown in [scripts](/scripts/)
 }
 ```
 
+
+
 ## Acknowledgment
+
 Weihao Yu would like to thank TRC program and GCP research credits for the support of partial computational resources. Our implementation is based on [pytorch-image-models](https://github.com/huggingface/pytorch-image-models), [poolformer](https://github.com/sail-sg/poolformer), [ConvNeXt](https://github.com/facebookresearch/ConvNeXt) and [metaformer](https://github.com/sail-sg/metaformer).

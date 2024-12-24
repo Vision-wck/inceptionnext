@@ -1,10 +1,8 @@
-#!/usr/bin/env python3
-r"""
-This script is mostly copied from https://github.com/rwightman/pytorch-image-models/blob/v0.6.11/train.py
-and make some modifications:
-1) enable the gradient accumulation (`--grad-accum-steps`)
-2) add `--head-dropout` for ConvFormer and CAFormer with MLP head
-3) Set some default values of hyper-parameters following DeiT:
+""" 该脚本大部分内容来自 https://github.com/rwightman/pytorch-image-models/blob/v0.6.11/train.py
+并做了一些修改：
+1) 启用了梯度累积（`--grad-accum-steps`）
+2) 为 ConvFormer 和带有 MLP 头的 CAFormer 添加了 `--head-dropout` 参数
+3) 根据 DeiT 设置了一些超参数的默认值：
 -j 8 \
 --opt adamw \
 --epochs 300 \
@@ -21,20 +19,19 @@ and make some modifications:
 --reprob 0.25 \
 """
 
-""" ImageNet Training Script
+""" ImageNet 训练脚本
 
-This is intended to be a lean and easily modifiable ImageNet training script that reproduces ImageNet
-training results with some of the latest networks and training techniques. It favours canonical PyTorch
-and standard Python style over trying to be able to 'do it all.' That said, it offers quite a few speed
-and training result improvements over the usual PyTorch example scripts. Repurpose as you see fit.
+这是一个轻量且易于修改的 ImageNet 训练脚本，旨在通过一些最新的网络和训练技术，重现 ImageNet 训练结果。
+它更倾向于使用标准的 PyTorch 和标准 Python 风格，而不是试图“做所有事情”。尽管如此，它在速度和训练结果上
+相较于常规的 PyTorch 示例脚本，提供了相当多的改进。您可以根据需要重新利用此脚本。
 
-This script was started from an early version of the PyTorch ImageNet example
+该脚本源自 PyTorch ImageNet 示例的早期版本
 (https://github.com/pytorch/examples/tree/master/imagenet)
 
-NVIDIA CUDA specific speedups adopted from NVIDIA Apex examples
+NVIDIA CUDA 特定的加速来自 NVIDIA Apex 示例
 (https://github.com/NVIDIA/apex/tree/master/examples/imagenet)
 
-Hacked together by / Copyright 2020 Ross Wightman (https://github.com/rwightman)
+由 / 版权所有 2020 Ross Wightman (https://github.com/rwightman)
 """
 import argparse
 import logging
@@ -54,6 +51,32 @@ from timm import utils
 from timm.data import create_dataset, create_loader, resolve_data_config, Mixup, FastCollateMixup, AugMixDataset
 from timm.loss import JsdCrossEntropy, SoftTargetCrossEntropy, BinaryCrossEntropy, \
     LabelSmoothingCrossEntropy
+# timm 是一个流行的 PyTorch 图像模型库，包含了大量的预训练模型，create_model 方法是其中的核心功能之一。
+
+# create_model 方法用于根据指定的模型名称和配置，动态地构建并返回一个已配置好的深度学习模型。
+# 该方法允许用户根据模型名称、预训练权重、输入类别数等多个参数来创建不同的神经网络模型。
+# 它的设计旨在简化模型的加载和配置过程，使用户能够方便地使用和扩展各种图像分类网络。
+# 作用：
+#   （1）动态创建模型：通过指定模型名称，自动加载相应的模型架构
+#   （2）加载预训练权重：支持加载预训练模型，这可以加速训练并提升模型性能
+#   （3）灵活配置：支持多种参数，允许用户配置网络架构的各个方面，如类别数、dropout 比率、模型的初始化权重路径等
+# 常见参数：
+#   model_name (str): 必须参数，指定要创建的模型的名称
+#   pretrained (bool): 可选参数，默认值为 False，表示是否加载预训练模型的权重
+#   num_classes (int): 可选参数，指定模型的输出类别数
+#   drop_rate (float): 可选参数，指定模型中某些层的 dropout 比率，用于防止过拟合
+#   drop_connect_rate (float): 可选参数，指定 DropConnect 的比率。DropConnect 是一种正则化技术，通常用于深度神经网络中，旨在通过随机“丢弃”连接来提高模型的鲁棒性。
+#   drop_path_rate (float): 可选参数，指定 DropPath 的比率。DropPath 是另一种类似 DropConnect 的正则化技术，通常用于更深的网络结构中
+#   checkpoint_path (str): 可选参数，指定模型初始化的检查点路径。如果需要从一个已保存的检查点加载权重，则可以通过此参数提供路径
+#   scriptable (bool): 可选参数，默认值为 False。如果设置为 True，则会启用 TorchScript 脚本化功能，这有助于将模型部署到非 Python 环境中
+#   global_pool (str): 可选参数，指定全局池化的方式。通常是 'avg' 或 'max'，分别表示使用全局平均池化或全局最大池化
+# 支持的模型：ResNet系列、EfficientNet系列、Vision Transformer（ViT）系列、Swin Transformer、其他
+
+# convert_splitbn_model 方法用于将模型转换为支持分割批量归一化（Split BatchNorm，简称 splitbn）的版本。
+# 分割批量归一化方法：将整个批次分割成多个小批次来计算每个小批次的统计量，并将这些小批次的统计量合并，从而避免了批次内样本数过少，导致统计量（均值和方差）不稳定的问题。
+# 作用：修改模型的批量归一化层，使其支持分割批量归一化。
+#   （1）通过将原本的标准批量归一化层转换为分割批量归一化层，使得每个小批次可以单独计算归一化参数。
+#   （2）适用于大规模数据集训练，或者使用对比学习（Contrastive Learning）、分布式训练时有特殊需求的场景。
 from timm.models import create_model, safe_model_name, resume_checkpoint, load_checkpoint, \
     convert_splitbn_model, convert_sync_batchnorm, model_parameters, set_fast_norm
 from timm.optim import create_optimizer_v2, optimizer_kwargs
@@ -95,18 +118,28 @@ except ImportError as e:
 torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('train')
 
-# The first arg parser parses out only the --config argument, this argument is used to
-# load a yaml file containing key-values that override the defaults for the main parser below
+# 第一个参数解析器仅解析 --config 参数，该参数用于加载一个包含键值对的 YAML 文件，用于覆盖下面主解析器的默认值
 config_parser = parser = argparse.ArgumentParser(description='Training Config', add_help=False)
+# add_arguments是argparse模块中的方法，用于向命令行工具中添加一个新的命令行参数。作用是定义命令行参数的名称、类型、默认值以及如何处理用户的输入
+# -c: 短名称
+# --config: 长名称
+# default属性用于设置参数的默认值。即：如果用户在命令行中没有提供该参数，该参数则使用默认值
+# type属性用于设置参数的属性。即：用户提供的参数值将被解析为该类型
+# metavar是帮助信息中的一个占位符，用于显示该参数期望的值的类型或描述
+# help提供一个简短的描述，说明该参数的用途，在显示命令行帮助时，这个描述将作为该参数的说明
 parser.add_argument('-c', '--config', default='', type=str, metavar='FILE',
                     help='YAML config file specifying default arguments')
 
 
+# 创建命令行解析器对象
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 
 # Dataset parameters
+# add_argument_group方法用于将相关的命令行参数分组，让命令行参数的组织结构更清晰，帮助用户快速了解每个参数的作用和功能
+# 该方法返回一个 ArgumentGroup 对象，允许你在该分组下添加命令行参数。通过使用分组，用户能够在帮助文档中更容易地查看与数据集相关的参数。
 group = parser.add_argument_group('Dataset parameters')
 # Keep this argument outside of the dataset group because it is positional.
+# data_dir 是作为位置参数（positional argument）的必选参数。没有前缀-或--，这意味着在命令行中，它的位置决定了它的作用
 parser.add_argument('data_dir', metavar='DIR',
                     help='path to dataset')
 group.add_argument('--dataset', '-d', metavar='NAME', default='',
@@ -115,6 +148,7 @@ group.add_argument('--train-split', metavar='NAME', default='train',
                     help='dataset train split (default: train)')
 group.add_argument('--val-split', metavar='NAME', default='validation',
                     help='dataset validation split (default: validation)')
+# action='store_true'表示当用户在命令行中提供该参数时，程序将把该参数的值设为True。如果用户没有提供该参数，程序将默认将其设为False
 group.add_argument('--dataset-download', action='store_true', default=False,
                     help='Allow download of dataset for torch/ and tfds/ datasets that support it.')
 group.add_argument('--class-map', default='', type=str, metavar='FILENAME',
@@ -138,10 +172,12 @@ group.add_argument('--gp', default=None, type=str, metavar='POOL',
                     help='Global pool type, one of (fast, avg, max, avgmax, avgmaxc). Model default if None.')
 group.add_argument('--img-size', type=int, default=None, metavar='N',
                     help='Image patch size (default: None => model default)')
+# nargs='3'表示该参数可以接受3个值，并将这些值作为一个列表传递给程序
 group.add_argument('--input-size', default=None, nargs=3, type=int,
                     metavar='N N N', help='Input all image dimensions (d h w, e.g. --input-size 3 224 224), uses model default if empty')
 group.add_argument('--crop-pct', default=None, type=float,
                     metavar='N', help='Input image center crop percent (for validation only)')
+# nargs='+'表示该参数可以接受一个或多个值，并将这些值作为一个列表传递给程序
 group.add_argument('--mean', type=float, nargs='+', default=None, metavar='MEAN',
                     help='Override mean pixel value of dataset')
 group.add_argument('--std', type=float, nargs='+', default=None, metavar='STD',
@@ -154,15 +190,23 @@ group.add_argument('-vb', '--validation-batch-size', type=int, default=None, met
                     help='Validation batch size override (default: None)')
 group.add_argument('--channels-last', action='store_true', default=False,
                     help='Use channels_last memory layout')
+
+# add_mutually_exclusive_group方法用于将一组互斥参数添加到组中
+# 互斥参数（mutually exclusive arguments）是指在命令行中，这些参数不能同时出现。如果用户指定了其中一个参数，那么其他互斥参数将无法使用
+# 在这段代码中，scripting_group 是一个互斥参数组，意味着该组中的参数是互斥的，用户只能选择其中一个
 scripting_group = group.add_mutually_exclusive_group()
 scripting_group.add_argument('--torchscript', dest='torchscript', action='store_true',
                     help='torch.jit.script the full model')
 scripting_group.add_argument('--aot-autograd', default=False, action='store_true',
                     help="Enable AOT Autograd support. (It's recommended to use this option with `--fuser nvfuser` together)")
+# --fuser 参数用于选择不同的 JIT (Just-In-Time) 编译器 fuser 类型。JIT 编译器用于在运行时将模型的计算图转换为更高效的实现，
+# 而 "fuser" 是用于合并操作、优化计算图的一个选项。不同的 fuser 实现可能在性能或兼容性上有所不同，尤其是在特定硬件或环境下
 group.add_argument('--fuser', default='', type=str,
                     help="Select jit fuser. One of ('', 'te', 'old', 'nvfuser')")
 group.add_argument('--fast-norm', default=False, action='store_true',
                     help='enable experimental fast-norm')
+# 该选项用于控制是否启用梯度检查点功能。
+# 梯度检查点是一个用于节省内存的技术，通过在反向传播时不保存某些中间梯度结果，而是重新计算这些结果来节省显存
 group.add_argument('--grad-checkpointing', action='store_true', default=False,
                     help='Enable gradient checkpointing through model blocks/stages')
 
@@ -294,13 +338,17 @@ group.add_argument('--head-dropout', type=float, default=0.0, metavar='PCT',
                     help='dropout rate for classifier (default: 0.0)')
 
 # Batch norm parameters (only works with gen_efficientnet based models currently)
+# 批量归一化参数（目前仅适用于基于 gen_efficientnet 的模型）
 group = parser.add_argument_group('Batch norm parameters', 'Only works with gen_efficientnet based models currently.')
 group.add_argument('--bn-momentum', type=float, default=None,
                     help='BatchNorm momentum override (if not None)')
 group.add_argument('--bn-eps', type=float, default=None,
                     help='BatchNorm epsilon override (if not None)')
+# 该参数设置是否启用了同步批量归一化（Synchronized BatchNorm）。同步批量归一化用于多 GPU 分布式训练，
+# 它会在所有 GPU 上同步计算均值和方差，以避免每个 GPU 上的 BN 计算不一致。
 group.add_argument('--sync-bn', action='store_true',
                     help='Enable NVIDIA Apex or Torch synchronized BatchNorm.')
+# 在每个 epoch 之后在节点之间分发批量归一化统计信息（"broadcast"、"reduce" 或 ""）
 group.add_argument('--dist-bn', type=str, default='reduce',
                     help='Distribute BatchNorm stats between nodes after each epoch ("broadcast", "reduce", or "")')
 group.add_argument('--split-bn', action='store_true',
@@ -354,66 +402,114 @@ group.add_argument('--tta', type=int, default=0, metavar='N',
 group.add_argument("--local_rank", default=0, type=int)
 group.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
+# wandb 是 Weights & Biases，一个常用的深度学习训练监控和可视化工具，能够记录训练过程中的超参数、日志、图表、模型以及其他指标
 group.add_argument('--log-wandb', action='store_true', default=False,
                     help='log training and validation metrics to wandb')
 
 
 def _parse_args():
+    """
+    解析命令行参数，支持从配置文件加载参数。首先解析可能的配置文件路径，若提供了配置文件，
+    会将其中的内容作为默认参数值。然后解析剩余的命令行参数，最终返回解析后的参数对象和
+    参数的 YAML 格式字符串。
+
+    该方法的功能是：
+    1. 解析命令行参数，包括从配置文件加载默认参数。
+    2. 将解析后的参数对象转换为 YAML 格式的文本，便于保存或记录。
+
+    返回：
+        tuple: 返回两个值：
+            - args (Namespace): 解析后的命令行参数对象。
+            - args_text (str): 参数对象的 YAML 格式字符串，用于保存或记录。
+    """
     # Do we have a config file to parse?
+    # 使用 config_parser 解析已知的命令行参数，返回解析后的配置参数和剩余的未知参数
     args_config, remaining = config_parser.parse_known_args()
+    # 检查用户是否通过命令行传递了配置文件路径（args_config.config），如果有则加载配置文件
     if args_config.config:
+        # 打开指定路径的配置文件并读取内容
         with open(args_config.config, 'r') as f:
+            # 使用 yaml.safe_load 解析 YAML 格式的配置文件内容，转换为字典
             cfg = yaml.safe_load(f)
+            # 使用解析得到的配置字典覆盖 parser 的默认参数值
             parser.set_defaults(**cfg)
 
     # The main arg parser parses the rest of the args, the usual
     # defaults will have been overridden if config file specified.
+    # 使用 parser 解析剩余的命令行参数（不包含已解析的配置参数），并返回解析后的参数对象。
+    # 如果提供了配置文件，则配置文件中的默认值已经被加载并覆盖了 parser 的默认值。
     args = parser.parse_args(remaining)
 
     # Cache the args as a text string to save them in the output dir later
+    # 将解析后的 args 对象转换为字典并使用 yaml.safe_dump 转换为 YAML 格式的文本。
+    # 设置 default_flow_style=False 以确保输出的 YAML 文本是块状风格（即更易读）。
     args_text = yaml.safe_dump(args.__dict__, default_flow_style=False)
+    # 返回解析后的命令行参数对象（args）和参数的 YAML 格式字符串（args_text）。
     return args, args_text
 
 
 def main():
+    # 设置默认的日志配置。这通常是为了初始化日志记录器，使得程序能够记录日志信息，便于调试和追踪
     utils.setup_default_logging()
+    # 解析命令行参数，返回：
+    # args: 解析后的命令行参数对象
+    # args_text: args 对象的 YAML 格式字符串（通常用于保存和记录日志）
     args, args_text = _parse_args()
 
+    # 根据 args.no_prefetcher 参数的值取反设置 args.prefetcher
     args.prefetcher = not args.no_prefetcher
+    # 表示默认情况下不使用分布式训练
     args.distributed = False
     if 'WORLD_SIZE' in os.environ:
+        # 如果 WORLD_SIZE 存在，判断其值是否大于 1。如果大于 1，说明启用了分布式训练，则将 args.distributed 设置为 True
         args.distributed = int(os.environ['WORLD_SIZE']) > 1
+    # 默认设置为 'cuda:0'，表示使用第 0 个 GPU。如果程序使用多 GPU 分布式训练，后续会根据 local_rank 修改该值
     args.device = 'cuda:0'
+    # 默认设置为1，表示使用 1 个进程进行训练
     args.world_size = 1
+    # 设置为 0，表示全局的进程编号。分布式训练时，每个进程会有一个唯一的全局编号
     args.rank = 0  # global rank
+    # 如果启用了分布式训练
     if args.distributed:
+        # 检查环境变量 LOCAL_RANK 是否存在，LOCAL_RANK 通常用于表示每个进程在单个节点上的 GPU 排序
         if 'LOCAL_RANK' in os.environ:
+            # 如果存在 LOCAL_RANK 环境变量，将其值解析为整数并赋值给 args.local_rank，表示当前进程在单个节点上的 GPU 排序
             args.local_rank = int(os.getenv('LOCAL_RANK'))
+        # 根据 local_rank 设置当前进程使用的 GPU 设备
         args.device = 'cuda:%d' % args.local_rank
+        # 设置当前进程使用的 GPU 设备
         torch.cuda.set_device(args.local_rank)
+        # 初始化分布式训练环境，使用 NCCL 后端（推荐用于多 GPU 训练）。init_method='env://' 表示通过环境变量初始化进程组
         torch.distributed.init_process_group(backend='nccl', init_method='env://')
+        # 获取分布式训练中的总进程数
         args.world_size = torch.distributed.get_world_size()
+        # 获取当前进程的全局排名（编号）
         args.rank = torch.distributed.get_rank()
         _logger.info('Training in distributed mode with multiple processes, 1 GPU per process. Process %d, total %d.'
                      % (args.rank, args.world_size))
     else:
         _logger.info('Training with a single process on 1 GPUs.')
+    # 确保 args.rank 为非负数。此断言用于确保进程编号有效
     assert args.rank >= 0
 
     if args.rank == 0 and args.log_wandb:
         if has_wandb:
+            # 初始化 wandb 记录，传入项目名称 args.experiment 和配置 args
             wandb.init(project=args.experiment, config=args)
         else:
             _logger.warning("You've requested to log metrics to wandb but package not found. "
                             "Metrics not being logged to wandb, try `pip install wandb`")
 
     # resolve AMP arguments based on PyTorch / Apex availability
+    # 用于选择是否启用混合精度训练
     use_amp = None
     if args.amp:
         # `--amp` chooses native amp before apex (APEX ver not actively maintained)
         if has_native_amp:
+            # 如果支持 PyTorch 的原生 AMP（自动混合精度），则启用原生 AMP
             args.native_amp = True
         elif has_apex:
+            # 如果支持 NVIDIA 的 APEX（加速库），则启用 APEX AMP
             args.apex_amp = True
     if args.apex_amp and has_apex:
         use_amp = 'apex'
@@ -425,11 +521,15 @@ def main():
 
     utils.random_seed(args.seed, args.rank)
 
+    #  检查并设置 JIT 编译器 fuser
     if args.fuser:
         utils.set_jit_fuser(args.fuser)
+    # 检查并设置加速归一化
     if args.fast_norm:
+        # fast_norm 可能指代优化的批归一化（Batch Normalization）实现，可以加速训练过程，减少计算开销
         set_fast_norm()
 
+    # 创建模型参数字典，将一系列与模型创建相关的参数传递给字典，这些参数从 args 获取，用于定义模型的结构和配置
     create_model_args = dict(
         model_name=args.model,
         pretrained=args.pretrained,
@@ -437,59 +537,86 @@ def main():
         drop_rate=args.drop,
         drop_connect_rate=args.drop_connect,  # DEPRECATED, use drop_path
         drop_path_rate=args.drop_path,
-        drop_block_rate=args.drop_block,
-        global_pool=args.gp,
-        bn_momentum=args.bn_momentum,
-        bn_eps=args.bn_eps,
-        scriptable=args.torchscript,
+        drop_block_rate=args.drop_block,    # DropBlock 丢弃率，类似于 DropPath，但作用范围更大，通常是块级别的丢弃
+        global_pool=args.gp,    # 是否启用全局池化（如全局平均池化）
+        bn_momentum=args.bn_momentum,   # 批归一化的动量超参数，用于计算运行时均值和方差
+        bn_eps=args.bn_eps, # 批归一化中的 epsilon 值，确保数值稳定性
+        scriptable=args.torchscript,    # 是否启用 TorchScript，将模型脚本化，以便于后续部署
         checkpoint_path=args.initial_checkpoint
     )
 
     if 'convformer' in args.model or 'caformer' in args.model:
+        # head_dropout 参数指定了模型头部（head）层的 dropout 比率
         create_model_args.update(head_dropout=args.head_dropout)
 
+    # 根据参数字典构建模型
+    # 通过解包字典的方式，将字典中的所有键值对作为参数传递给函数。通过这种方式，可以动态传递多个参数到函数中，以创建指定的模型
     model = create_model(**create_model_args)
 
     if args.num_classes is None:
+        # 这行代码检查 model 对象是否具有 num_classes 属性。如果模型有该属性，则返回 True；否则返回 False，抛出异常。
+        # 这个断言保证，如果用户没有在命令行中设置 num_classes，则模型本身必须定义这个属性。
         assert hasattr(model, 'num_classes'), 'Model must have `num_classes` attr if not set on cmd line/config.'
         args.num_classes = model.num_classes  # FIXME handle model default vs config num_classes more elegantly
 
     if args.grad_checkpointing:
+        # 如果启用了梯度检查点，调用模型的 set_grad_checkpointing 方法启用该功能。
         model.set_grad_checkpointing(enable=True)
 
     if args.local_rank == 0:
+        # m.numel() 计算每个参数张量中的元素个数
         _logger.info(
             f'Model {safe_model_name(args.model)} created, param count:{sum([m.numel() for m in model.parameters()])}')
 
-    data_config = resolve_data_config(vars(args), model=model, verbose=args.local_rank == 0)
+    # 该函数用于解析并配置数据相关的设置，如数据预处理、数据集路径、批次大小等。
+    # vars() 函数返回 args 对象的 __dict__ 属性，它包含了通过命令行传递的所有参数。这里将命令行参数转换为字典形式，以便传递给 resolve_data_config
+    # verbose 参数用来决定是否打印详细信息
+    data_config = resolve_data_config(vars(args), model=model, verbose=(args.local_rank == 0))
 
     # setup augmentation batch splits for contrastive loss or split bn
+    # 该变量控制增强时批次的分割数量，通常用于对比学习或分割批量归一化（BatchNorm）
     num_aug_splits = 0
     if args.aug_splits > 0:
+        # 断言 args.aug_splits 必须大于 1，因为将批次分割为 1 是没有意义的。
+        # 批次分割的目的是为了在训练过程中进行数据增强或优化批量归一化，因此至少需要分割成两个部分
         assert args.aug_splits > 1, 'A split of 1 makes no sense'
         num_aug_splits = args.aug_splits
 
     # enable split bn (separate bn stats per batch-portion)
     if args.split_bn:
+        # 如果启用了分割批量归一化
         assert num_aug_splits > 1 or args.resplit
+        # 将模型转换为支持分割批量归一化的版本
         model = convert_splitbn_model(model, max(num_aug_splits, 2))
 
     # move model to GPU, enable channels last layout if set
+    # 将模型移到 GPU 并根据需要启用通道优先内存布局
+    # 将模型的所有参数和缓存在 GPU 上进行计算。cuda() 是 PyTorch 中用于将模型或张量移到 GPU 的方法。
+    # 默认情况下，它会将模型转移到第一个可用的 GPU（如果有多个 GPU，可以指定设备）。
     model.cuda()
+    # 是否使用通道优先内存布局（channels_last）
     if args.channels_last:
+        # 将模型的内存布局转为 channels_last，这是 PyTorch 中的一种优化内存布局格式。它会将张量的维度顺序调整为 N, H, W, C，
+        # 其中 N 是批次大小，H 和 W 是高度和宽度，C 是通道数。这种格式在一些 GPU 上的卷积操作中可以带来显著的性能提升。
         model = model.to(memory_format=torch.channels_last)
 
     # setup synchronized BatchNorm for distributed training
+    # 为分布式训练设置同步批量归一化
     if args.distributed and args.sync_bn:
+        # 禁用分布式批量归一化（dist_bn）设置。当启用同步批量归一化时，不再使用传统的分布式批量归一化（dist_bn）方法。
         args.dist_bn = ''  # disable dist_bn when sync BN active
+        # 断言 args.split_bn 不为 True。这确保了不能同时启用分割批量归一化（Split BatchNorm）和同步批量归一化（SyncBN），因为这两种方法不兼容。
         assert not args.split_bn
         if has_apex and use_amp == 'apex':
             # Apex SyncBN used with Apex AMP
             # WARNING this won't currently work with models using BatchNormAct2d
+            # 如果使用了 Apex，则调用以下函数将模型转换为支持同步批量归一化的版本
             model = convert_syncbn_model(model)
         else:
+            # 如果没有使用 Apex，则使用默认的 PyTorch 函数 convert_sync_batchnorm 将模型转换为支持同步批量归一化的版本
             model = convert_sync_batchnorm(model)
         if args.local_rank == 0:
+            # local_rank 是分布式训练中的一个常见变量，用来表示当前进程的 ID，local_rank == 0 表示这是第一个进程（主进程）
             _logger.info(
                 'Converted model to use Synchronized BatchNorm. WARNING: You may have issues if using '
                 'zero initialized BN layers (enabled by default for ResNets) while sync-bn enabled.')

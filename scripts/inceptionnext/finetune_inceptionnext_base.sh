@@ -15,9 +15,9 @@ DROP=0.5
 
 
 cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
---model $MODEL --img-size 384 --epochs 30 --opt adamw --lr 5e-5 --sched None \
--b $BATCH_SIZE --grad-accum-steps $GRAD_ACCUM_STEPS \
---initial-checkpoint $INIT_CKPT \
---mixup 0 --cutmix 0 \
---model-ema --model-ema-decay 0.9999 \
---drop-path $DROP_PATH --drop $DROP
+  --model $MODEL --img-size 384 --epochs 30 --opt adamw --lr 5e-5 --sched None \
+  -b $BATCH_SIZE --grad-accum-steps $GRAD_ACCUM_STEPS \
+  --initial-checkpoint $INIT_CKPT \
+  --mixup 0 --cutmix 0 \
+  --model-ema --model-ema-decay 0.9999 \
+  --drop-path $DROP_PATH --drop $DROP
