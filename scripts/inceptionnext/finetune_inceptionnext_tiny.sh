@@ -1,18 +1,19 @@
 # 定义数据路径，指向包含图像数据的目录
 #DATA_PATH=D:/PadsWorkspace/server232/pz_project/xingsen/smart_precheck_system/PCBlayer_name_recognize/data/PCB_image/exp0/num10
-DATA_PATH=/home/joey.wang/pz_project/xingsen/smart_precheck_system/PCB_layername_recognize/data/PCB_image/exp0/num10
+DATA_PATH=/home/joey.wang/pz_project/xingsen/smart_precheck_system/PCBlayer_name_recognize/data/PCB_image/exp0/num10
 # 定义代码路径，指向inceptionnext项目代码所在目录
 CODE_PATH=../../../inceptionnext
 # 定义预训练模型的检查点路径，指向一个预训练模型文件，用于初始化模型的权重
 INIT_CKPT=../pretrained/inceptionnext_tiny.pth
 
+CUDA_VISIBLE_DEVICES=0
 
 # 定义全批次大小，表示训练中使用的总批次大小，不考虑GPU数量和梯度累积
-ALL_BATCH_SIZE=1024
+ALL_BATCH_SIZE=1
 # 定义使用的GPU数量，这是为了进行分布式训练而设置的GPU数量
-NUM_GPU=8
+NUM_GPU=1
 # 定义梯度累积步数。如果内存有限，可以通过梯度累积来模拟更大的批次
-GRAD_ACCUM_STEPS=4 # Adjust according to your GPU numbers and memory size.
+GRAD_ACCUM_STEPS=1 # Adjust according to your GPU numbers and memory size.
 # 计算每个GPU上的批次大小，
 # 使用总批次大小除以GPU数量和梯度累积步数，以确保每个GPU上的批次适配并节省内存
 let BATCH_SIZE=ALL_BATCH_SIZE/NUM_GPU/GRAD_ACCUM_STEPS
