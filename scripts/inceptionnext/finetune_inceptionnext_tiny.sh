@@ -25,7 +25,10 @@ DROP_PATH=0.7
 DROP=0.5
 
 OUTPUT=./output
-EXPERIMENT=ex0
+#EXPERIMENT=exp0
+
+echo "Begining"
+
 
 # 进入代码目录，并执行distributed_train.sh脚本来启动分布式训练
 cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
@@ -57,4 +60,4 @@ cd $CODE_PATH && sh distributed_train.sh $NUM_GPU $DATA_PATH \
   --drop $DROP                # 设置Drop的概率，用于连接丢弃
 
   --output $OUTPUT \
-  --experiment $EXPERIMENT  \
+#  --experiment $EXPERIMENT  \
