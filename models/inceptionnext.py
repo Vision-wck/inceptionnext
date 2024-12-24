@@ -256,7 +256,6 @@ class MetaNeXt(nn.Module):
     @torch.jit.ignore
     def no_weight_decay(self):
         return {'norm'}
-    
 
     def forward_features(self, x):
         x = self.stem(x)
@@ -272,13 +271,11 @@ class MetaNeXt(nn.Module):
         x = self.forward_head(x)
         return x
 
-
     def _init_weights(self, m):
         if isinstance(m, (nn.Conv2d, nn.Linear)):
             trunc_normal_(m.weight, std=.02)
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-
 
 
 def _cfg(url='', **kwargs):

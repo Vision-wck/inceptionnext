@@ -129,6 +129,11 @@ try:
 except ImportError as e:
     has_functorch = False
 
+try:
+    import ipdb
+except:
+    import pdb as ipdb
+
 
 torch.backends.cudnn.benchmark = True
 _logger = logging.getLogger('train')
@@ -416,7 +421,7 @@ group.add_argument('--eval-metric', default='top1', type=str, metavar='EVAL_METR
                     help='Best metric (default: "top1"')
 group.add_argument('--tta', type=int, default=0, metavar='N',
                     help='Test/inference time augmentation (oversampling) factor. 0=None (default: 0)')
-group.add_argument("--local_rank", default=0, type=int)
+group.add_argument("--local-rank", default=0, type=int)
 group.add_argument('--use-multi-epochs-loader', action='store_true', default=False,
                     help='use the multi-epochs-loader to save time at the beginning of every epoch')
 # wandb 是 Weights & Biases，一个常用的深度学习训练监控和可视化工具，能够记录训练过程中的超参数、日志、图表、模型以及其他指标
@@ -762,6 +767,7 @@ def main():
 
     # args.grad_accum_steps：梯度累积步数，即在进行一次优化步骤之前，模型会累计多个批次的梯度。通常在内存限制较小的情况下使用。
     # 计算总批次大小，总批次 = 每设备的批次大小 * 梯度累积步数 * 总设备数
+    ipdb.set_trace()
     total_batch_size = args.batch_size * args.grad_accum_steps * args.world_size
     # 计算每个训练周期（epoch）的训练步骤数。
     num_training_steps_per_epoch = len(dataset_train) // total_batch_size
@@ -902,6 +908,7 @@ def main():
             f.write(args_text)
 
     try:
+        ipdb.set_trace()
         for epoch in range(start_epoch, num_epochs):
             # loader_train.sampler 通常是 DistributedSampler 对象，有 set_epoch 方法，
             # 则调用 set_epoch(epoch) 来更新分布式数据加载器的当前 epoch。这对于分布式训练中的数据打乱至关重要，确保每个 epoch 中每个进程的数据顺序是不同的。
@@ -1054,7 +1061,7 @@ def train_one_epoch(
             loss = loss_fn(output, target)
 
         if not args.distributed:
-            # 如果没有启用分布式训练，则更新更新损失的平均值
+            # 如果没有启用分布式训练，则更新损失的平均值
             losses_m.update(loss.item(), input.size(0))
 
         # 计算当前批次是否是梯度更新的时机。因为 batch_idx 是0-based，所以需要+1
