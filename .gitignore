@@ -2,3 +2,4 @@ pretrained/
 __pycache__/
 models/__pycache__/
 output/
+.idea/

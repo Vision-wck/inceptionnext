@@ -1,16 +1,16 @@
 #!/bin/bash
 
 # 定义数据路径，指向包含图像数据的目录
-DATA_PATH=/home/joey.wang/pz_project/xingsen/smart_precheck/PCBlayer_name_recognize/data/PCB_image/20241226/exp1/splitted
+DATA_PATH=/home/joey.wang/pz_project/xingsen/smart_precheck_system/PCBlayer_name_recognize/data/PCB_image/20241226/class_split
 # 定义代码路径，指向inceptionnext项目代码所在目录
 CODE_PATH=/home/joey.wang/Vision/inceptionnext
 # 定义预训练模型的检查点路径，指向一个预训练模型文件，用于初始化模型的权重
 INIT_CKPT=/home/joey.wang/Vision/inceptionnext/pretrained/inceptionnext_tiny.pth
 
-CUDA_VISIBLE_DEVICES=5,6
+CUDA_VISIBLE_DEVICES=4,5
 
 # 定义全批次大小，表示训练中使用的总批次大小，不考虑GPU数量和梯度累积
-ALL_BATCH_SIZE=256
+ALL_BATCH_SIZE=512
 # 定义使用的GPU数量，这是为了进行分布式训练而设置的GPU数量
 NUM_GPU=2
 # 定义梯度累积步数。如果内存有限，可以通过梯度累积来模拟更大的批次
@@ -29,7 +29,7 @@ DROP=0.5
 OUTPUT=./output
 #EXPERIMENT=exp0
 
-EPOCHS=100
+EPOCHS=200
 
 echo "Begining"
 
